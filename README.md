@@ -9,6 +9,7 @@ Este repositório contém os materiais, notas técnicas e recursos do **Manual P
 *   [recursos.md](file:///c:/Users/Taiane/Documents/Nexus%20Ia/recursos.md): Catálogo de ferramentas, insumos e equipamentos de segurança essenciais.
 *   `anotacoes/`: Pasta dedicada ao registro de práticas de bancada e procedimentos efetuados.
     *   [Técnica-01.md](file:///c:/Users/Taiane/Documents/Nexus%20Ia/anotacoes/T%C3%A9cnica-01.md): Modelo/Template para documentação de reparos.
+*   [nexus_agent.py](file:///c:/Users/Taiane/Documents/Nexus%20Ia/nexus_agent.py): Script de Inteligência Artificial usando LangChain e Gemini para conversar com o manual técnico.
 
 ---
 
@@ -36,6 +37,25 @@ Para documentar um novo reparo efetuado em sua bancada:
 2. Duplique o arquivo [Técnica-01.md](file:///c:/Users/Taiane/Documents/Nexus%20Ia/anotacoes/T%C3%A9cnica-01.md).
 3. Renomeie para a numeração/nome do seu reparo (ex: `Técnica-02-Troca-Tela-A32.md`).
 4. Preencha os campos com os dados do serviço.
+
+---
+
+## 🤖 Agente de Inteligência Artificial (Nexus IA)
+
+O arquivo [nexus_agent.py](file:///c:/Users/Taiane/Documents/Nexus%20Ia/nexus_agent.py) permite interagir com a IA (Google Gemini) de forma que ela use os dados do seu manual do e-book para responder a perguntas técnicas.
+
+### Pré-requisitos (Instalação)
+No terminal da pasta do seu projeto, instale as bibliotecas necessárias do Python:
+```bash
+pip install langchain langchain-community langchain-google-genai pypdf unstructured
+```
+
+### Como Executar
+1. Defina sua chave de API do Gemini nas variáveis de ambiente ou digite-a quando o script solicitar ao iniciar.
+2. Execute o script com o comando:
+   ```bash
+   python nexus_agent.py
+   ```
 
 ---
 
