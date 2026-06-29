@@ -1,325 +1,375 @@
 import os
 import streamlit as st
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.document_loaders import TextLoader
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 
 # ─────────────────────────────────────────────
-# Configuração da Página (DEVE ser o 1º comando Streamlit)
+# Configuração da Página
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Nexus IA – Assistente TCell",
-    page_icon="🔧",
+    page_title="Nexus IA – Seu Assistente Inteligente",
+    page_icon="✦",
     layout="centered",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────
-# CSS Customizado – Visual Premium Dark
+# CSS Premium – Identidade Nexus IA
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Importar fonte moderna */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-    /* Fundo geral */
     html, body, .stApp {
-        background: linear-gradient(135deg, #0a0a1a 0%, #0d1117 50%, #0a1628 100%);
+        background: #080810;
         font-family: 'Inter', sans-serif;
-        color: #e6edf3;
+        color: #e2e8f0;
     }
 
-    /* Remover header padrão do Streamlit */
     #MainMenu, header, footer { visibility: hidden; }
 
-    /* Container principal */
     .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        max-width: 820px;
+        padding-top: 0rem;
+        padding-bottom: 5rem;
+        max-width: 780px;
     }
 
-    /* ── Mensagens de Chat ── */
-    .chat-bubble {
-        padding: 14px 18px;
-        border-radius: 16px;
-        margin-bottom: 12px;
-        line-height: 1.65;
-        font-size: 0.95rem;
-        animation: fadeIn 0.3s ease-in;
+    /* ── Hero Header ── */
+    .nexus-hero {
+        text-align: center;
+        padding: 2.5rem 1rem 1.5rem 1rem;
+        position: relative;
     }
 
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(8px); }
+    .nexus-logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 0 40px rgba(139, 92, 246, 0.5),
+                    0 0 80px rgba(99, 102, 241, 0.2);
+        animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 40px rgba(139,92,246,0.5), 0 0 80px rgba(99,102,241,0.2); }
+        50%       { box-shadow: 0 0 60px rgba(139,92,246,0.8), 0 0 120px rgba(99,102,241,0.4); }
+    }
+
+    .nexus-title {
+        font-size: 2.4rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(90deg, #a78bfa, #818cf8, #38bdf8, #34d399);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 0;
+        line-height: 1.1;
+    }
+
+    .nexus-subtitle {
+        color: #64748b;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+    }
+
+    /* ── Área de Chat ── */
+    .chat-area {
+        margin: 0.5rem 0;
+    }
+
+    .message-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        margin-bottom: 1rem;
+        animation: slideIn 0.25s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(10px); }
         to   { opacity: 1; transform: translateY(0); }
     }
 
-    .user-bubble {
-        background: linear-gradient(135deg, #1e3a5f, #1a4a7a);
-        border: 1px solid #2a5a9f;
-        border-bottom-right-radius: 4px;
-        margin-left: 15%;
-        box-shadow: 0 4px 15px rgba(30, 120, 220, 0.2);
+    .message-row.user  { flex-direction: row-reverse; }
+    .message-row.nexus { flex-direction: row; }
+
+    /* Avatares */
+    .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
     }
 
-    .nexus-bubble {
-        background: linear-gradient(135deg, #161b22, #1c2333);
-        border: 1px solid #30363d;
+    .avatar-nexus {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        box-shadow: 0 0 12px rgba(139,92,246,0.5);
+    }
+
+    .avatar-user {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        border: 1px solid #334155;
+    }
+
+    /* Bolhas */
+    .bubble {
+        padding: 13px 18px;
+        border-radius: 18px;
+        max-width: 82%;
+        font-size: 0.925rem;
+        line-height: 1.7;
+    }
+
+    .bubble-nexus {
+        background: linear-gradient(135deg, #0f0f1e, #12122a);
+        border: 1px solid #1e1e3f;
         border-bottom-left-radius: 4px;
-        margin-right: 15%;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        color: #e2e8f0;
     }
 
-    /* Rótulos das mensagens */
-    .bubble-label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 6px;
-        opacity: 0.65;
+    .bubble-user {
+        background: linear-gradient(135deg, #312e81, #3730a3);
+        border: 1px solid #4338ca;
+        border-bottom-right-radius: 4px;
+        color: #eef2ff;
     }
 
-    .user-label  { color: #79c0ff; }
-    .nexus-label { color: #3fb950; }
-
-    /* Divider do histórico */
-    .chat-divider {
+    /* Divisor sutil */
+    .chat-sep {
         border: none;
-        border-top: 1px solid #21262d;
-        margin: 20px 0;
+        border-top: 1px solid #0f172a;
+        margin: 0.3rem 0 1rem 0;
     }
 
-    /* Input de texto */
-    .stChatInput > div > div > textarea {
-        background-color: #161b22 !important;
-        border: 1px solid #30363d !important;
-        border-radius: 12px !important;
-        color: #e6edf3 !important;
+    /* ── Input de Chat ── */
+    [data-testid="stChatInput"] textarea {
+        background: #0f0f1e !important;
+        border: 1px solid #1e1e3f !important;
+        border-radius: 16px !important;
+        color: #e2e8f0 !important;
         font-family: 'Inter', sans-serif !important;
-        font-size: 0.95rem !important;
-        padding: 12px 16px !important;
+        font-size: 0.93rem !important;
+        padding: 14px 18px !important;
+        transition: border 0.2s !important;
+        box-shadow: 0 0 0 0px rgba(139,92,246,0) !important;
     }
 
-    .stChatInput > div > div > textarea:focus {
-        border-color: #1f6feb !important;
-        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15) !important;
+    [data-testid="stChatInput"] textarea:focus {
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.2) !important;
     }
 
-    /* Barra lateral */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0d1117 0%, #161b22 100%) !important;
-        border-right: 1px solid #21262d !important;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: #c9d1d9 !important;
-    }
-
-    /* Spinner */
-    .stSpinner > div { border-top-color: #3fb950 !important; }
-
-    /* Botão de limpar chat */
-    .stButton > button {
-        background: linear-gradient(135deg, #1e3a5f, #1a4a7a);
-        border: 1px solid #2a5a9f;
-        color: #79c0ff !important;
-        border-radius: 10px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        padding: 8px 18px;
-        width: 100%;
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #1a4a7a, #1e6eb0);
-        border-color: #3d8bca;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(31,111,235,0.3);
-    }
-
-    /* Info / warning boxes */
-    .stAlert {
+    /* Botão de submit do chat */
+    [data-testid="stChatInputSubmitButton"] {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
         border-radius: 12px !important;
-        border: 1px solid #30363d !important;
-        background: #161b22 !important;
     }
+
+    /* ── Sidebar ── */
+    [data-testid="stSidebar"] {
+        background: #080810 !important;
+        border-right: 1px solid #0f172a !important;
+    }
+
+    /* ── Spinner ── */
+    .stSpinner > div { border-top-color: #8b5cf6 !important; }
+
+    /* ── Chips de sugestão ── */
+    .suggestion-chip {
+        display: inline-block;
+        background: #0f0f1e;
+        border: 1px solid #1e1e3f;
+        border-radius: 20px;
+        padding: 7px 15px;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        margin: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .suggestion-chip:hover {
+        border-color: #6366f1;
+        color: #a78bfa;
+        background: #12122a;
+    }
+
+    /* Botão limpar */
+    .stButton > button {
+        background: transparent;
+        border: 1px solid #1e1e3f;
+        color: #64748b !important;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        padding: 6px 14px;
+        transition: all 0.2s;
+    }
+    .stButton > button:hover {
+        border-color: #6366f1;
+        color: #a78bfa !important;
+    }
+
+    /* Ocultar label do chat input */
+    [data-testid="stChatInput"] label { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Cabeçalho Principal
+# Hero Header
 # ─────────────────────────────────────────────
 st.markdown("""
-<div style='text-align:center; padding: 1.5rem 0 0.5rem 0;'>
-    <div style='font-size:3rem; margin-bottom:8px;'>🔧</div>
-    <h1 style='margin:0; font-size:2rem; font-weight:700;
-               background: linear-gradient(90deg, #3fb950, #79c0ff, #d2a8ff);
-               -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-               background-clip:text;'>
-        Nexus IA
-    </h1>
-    <p style='color:#8b949e; font-size:0.9rem; margin-top:6px; letter-spacing:0.05em;'>
-        Assistente Técnico Premium · TCell Manutenção de Smartphones
-    </p>
+<div class="nexus-hero">
+    <div class="nexus-logo">✦</div>
+    <h1 class="nexus-title">Nexus IA</h1>
+    <p class="nexus-subtitle">Inteligência Artificial · Sempre pronto para te ajudar</p>
 </div>
-<hr style='border:none; border-top:1px solid #21262d; margin: 1rem 0 1.5rem 0;'>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Carregar API Key (dos Streamlit Secrets ou ambiente)
+# Carregar API Key
 # ─────────────────────────────────────────────
-api_key = st.secrets.get("GOOGLE_API_KEY", None) or os.environ.get("GOOGLE_API_KEY", None)
+api_key = (
+    st.secrets.get("GOOGLE_API_KEY", None)
+    if hasattr(st, "secrets") else None
+) or os.environ.get("GOOGLE_API_KEY", None)
 
 if not api_key:
-    st.error("⚠️ **Chave de API não configurada.** Entre em contato com o administrador do sistema.", icon="🔑")
+    st.markdown("""
+    <div style='text-align:center; padding: 2rem; color:#64748b;'>
+        ⚠️ Sistema em configuração. Tente novamente em breve.
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 os.environ["GOOGLE_API_KEY"] = api_key
 
 # ─────────────────────────────────────────────
-# Barra Lateral – Informações e Controles
-# ─────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### 🤖 Nexus IA")
-    st.markdown("**Versão:** 1.0")
-    st.markdown("**Motor:** Google Gemini")
-    st.markdown("---")
-    st.markdown("### 📚 Sobre")
-    st.markdown("""
-    O **Nexus IA** é o assistente técnico especialista em manutenção de smartphones da **TCell**.
-
-    Ele foi treinado com o *Manual Premium de Assistência Técnica* e pode responder dúvidas sobre:
-    - 🛠️ Diagnósticos e reparos
-    - 📱 Troca de telas e baterias
-    - 🔌 Recuperação de conectores
-    - 💰 Precificação de serviços
-    - ⚡ Segurança e ferramentas ESD
-    """)
-    st.markdown("---")
-
-    if st.button("🗑️ Limpar Conversa", key="clear_chat"):
-        st.session_state.messages = []
-        st.rerun()
-
-    st.markdown("---")
-    st.markdown(
-        "<div style='font-size:0.75rem; opacity:0.5; text-align:center;'>TCell © 2026</div>",
-        unsafe_allow_html=True
-    )
-
-# ─────────────────────────────────────────────
-# Carregar e Cachear o Manual Técnico
-# ─────────────────────────────────────────────
-@st.cache_resource(show_spinner="📖 Carregando manual técnico TCell...")
-def carregar_contexto():
-    """Carrega e processa o e-book do manual técnico uma única vez."""
-    caminho = os.path.join(os.path.dirname(__file__), "Ebook_Manual_Premium_Celular.md")
-    if os.path.exists(caminho):
-        loader = TextLoader(caminho, encoding="utf-8")
-        docs = loader.load()
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
-        partes = splitter.split_documents(docs)
-        contexto = "\n\n".join([d.page_content for d in partes])
-        return contexto
-    return ""
-
-contexto_manual = carregar_contexto()
-
-# ─────────────────────────────────────────────
-# Inicializar Modelo Gemini
+# Inicializar Modelo
 # ─────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def get_llm():
     return ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
-        temperature=0.35,
+        temperature=0.7,
         max_output_tokens=2048,
     )
 
 llm = get_llm()
 
+SYSTEM_PROMPT = """Você é o Nexus IA, um assistente de inteligência artificial avançado, inteligente e amigável.
+Responda sempre em português do Brasil, de forma clara, natural e envolvente.
+Você pode ajudar com qualquer assunto: perguntas gerais, criatividade, tecnologia, conselhos, 
+redação, análise, programação, dúvidas do dia a dia e muito mais.
+Seja direto, útil e use uma linguagem acessível. Use emojis com moderação quando ficarem naturais."""
+
 # ─────────────────────────────────────────────
-# Gerenciar Histórico do Chat
+# Histórico do Chat
 # ─────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-    # Mensagem de boas-vindas automática do Nexus
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": (
-            "Olá! Sou o **Nexus IA**, seu assistente técnico especialista em manutenção de smartphones da TCell. 👋\n\n"
-            "Pode me perguntar sobre:\n"
-            "- 🔧 Diagnóstico e reparos técnicos\n"
-            "- 📱 Troca de telas LCD, OLED e AMOLED\n"
-            "- 🔋 Substituição e diagnóstico de baterias\n"
-            "- 🔌 Recuperação de conectores de carga\n"
-            "- ⚡ Segurança ESD e organização de bancada\n"
-            "- 💰 Precificação e atendimento premium\n\n"
-            "Em que posso te ajudar hoje?"
-        )
-    })
+# ─────────────────────────────────────────────
+# Tela inicial com sugestões (só aparece se não houver mensagens)
+# ─────────────────────────────────────────────
+if not st.session_state.messages:
+    st.markdown("""
+    <div style='text-align:center; padding: 1rem 0 0.5rem 0; color:#334155; font-size:0.85rem; letter-spacing:0.05em;'>
+        EXPERIMENTE PERGUNTAR
+    </div>
+    <div style='text-align:center; margin-bottom: 1.5rem;'>
+        <span class='suggestion-chip'>✍️ Escreva um texto para mim</span>
+        <span class='suggestion-chip'>💡 Me dê uma ideia criativa</span>
+        <span class='suggestion-chip'>🔧 Ajude com tecnologia</span>
+        <span class='suggestion-chip'>📚 Explique um conceito</span>
+        <span class='suggestion-chip'>🌍 Traduza algo</span>
+        <span class='suggestion-chip'>🤔 Me aconselhe</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Renderizar Histórico de Mensagens
+# Renderizar Histórico
 # ─────────────────────────────────────────────
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(f"""
-        <div class='chat-bubble user-bubble'>
-            <div class='bubble-label user-label'>Você</div>
-            {msg['content']}
+        <div class='message-row user'>
+            <div class='avatar avatar-user'>👤</div>
+            <div class='bubble bubble-user'>{msg['content']}</div>
         </div>""", unsafe_allow_html=True)
     else:
         st.markdown(f"""
-        <div class='chat-bubble nexus-bubble'>
-            <div class='bubble-label nexus-label'>🔧 Nexus IA</div>
-            {msg['content']}
+        <div class='message-row nexus'>
+            <div class='avatar avatar-nexus'>✦</div>
+            <div class='bubble bubble-nexus'>{msg['content']}</div>
         </div>""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Campo de Entrada do Usuário
+# Botão de limpar (só aparece se houver mensagens)
 # ─────────────────────────────────────────────
-pergunta = st.chat_input("Digite sua dúvida técnica aqui...", key="user_input")
+if st.session_state.messages:
+    col1, col2, col3 = st.columns([4, 2, 4])
+    with col2:
+        if st.button("🗑️ Nova conversa", key="clear"):
+            st.session_state.messages = []
+            st.rerun()
+
+# ─────────────────────────────────────────────
+# Input do Usuário
+# ─────────────────────────────────────────────
+pergunta = st.chat_input("Pergunte qualquer coisa ao Nexus IA...", key="input")
 
 if pergunta:
-    # Adiciona e exibe a mensagem do usuário
+    # Exibir pergunta do usuário
     st.session_state.messages.append({"role": "user", "content": pergunta})
     st.markdown(f"""
-    <div class='chat-bubble user-bubble'>
-        <div class='bubble-label user-label'>Você</div>
-        {pergunta}
+    <div class='message-row user'>
+        <div class='avatar avatar-user'>👤</div>
+        <div class='bubble bubble-user'>{pergunta}</div>
     </div>""", unsafe_allow_html=True)
 
-    # Gera a resposta do Nexus
-    with st.spinner("🔧 Nexus pensando..."):
+    # Montar histórico para o modelo
+    historico = []
+    for msg in st.session_state.messages[:-1]:
+        if msg["role"] == "user":
+            historico.append(HumanMessage(content=msg["content"]))
+        else:
+            historico.append(AIMessage(content=msg["content"]))
+
+    # Gerar resposta
+    with st.spinner(""):
         prompt_template = ChatPromptTemplate.from_messages([
-            ("system",
-             "Você é o Nexus IA, um assistente técnico especialista em manutenção de smartphones da TCell. "
-             "Responda de forma clara, profissional e didática em português do Brasil. "
-             "Use o contexto do manual técnico abaixo para responder com precisão. "
-             "Se não encontrar a resposta no manual, use seu conhecimento geral de forma segura e honesta. "
-             "Formate sua resposta com emojis e markdown quando apropriado para torná-la mais legível."
-             "\n\nContexto do Manual TCell:\n{context}"),
-            ("human", "{question}")
+            ("system", SYSTEM_PROMPT),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{question}"),
         ])
         chain = prompt_template | llm
         try:
             resposta = chain.invoke({
-                "context": contexto_manual,
+                "history": historico,
                 "question": pergunta
             })
             conteudo = resposta.content
         except Exception as e:
-            conteudo = f"❌ Erro ao processar sua pergunta: {e}"
+            conteudo = f"❌ Erro: {e}"
 
-    # Adiciona e exibe a resposta do Nexus
+    # Exibir resposta
     st.session_state.messages.append({"role": "assistant", "content": conteudo})
     st.markdown(f"""
-    <div class='chat-bubble nexus-bubble'>
-        <div class='bubble-label nexus-label'>🔧 Nexus IA</div>
-        {conteudo}
+    <div class='message-row nexus'>
+        <div class='avatar avatar-nexus'>✦</div>
+        <div class='bubble bubble-nexus'>{conteudo}</div>
     </div>""", unsafe_allow_html=True)
